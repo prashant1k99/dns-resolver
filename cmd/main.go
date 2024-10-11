@@ -9,7 +9,8 @@ import (
 )
 
 func QueryServer(message []byte) {
-	serverAddr, err := net.ResolveUDPAddr("udp", "8.8.8.8:53")
+	serverAddr, err := net.ResolveUDPAddr("udp", "198.41.0.4:53")
+	// serverAddr, err := net.ResolveUDPAddr("udp", "8.8.8.8:53")
 	if err != nil {
 		fmt.Println("Error resolving address:", err)
 		os.Exit(1)
@@ -46,6 +47,7 @@ func QueryServer(message []byte) {
 		fmt.Println("Error while parsing response header:", err)
 		os.Exit(1)
 	}
+	fmt.Println(header)
 	offset += 12
 	if header.QDCOUNT > 0 {
 		que, newOffset, err := dns.ParseDNSQuestion(buffer[:n], int(header.QDCOUNT), offset)
@@ -59,6 +61,7 @@ func QueryServer(message []byte) {
 		}
 	}
 
+	fmt.Printf("%8x\n", buffer[offset:n])
 	if header.ANCOUNT > 0 {
 		ans, newOffset, err := dns.ParseDNSAnswer(buffer[:n], int(header.ANCOUNT), offset)
 		if err != nil {

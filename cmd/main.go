@@ -40,12 +40,25 @@ func QueryServer(message []byte) {
 
 	fmt.Printf("%8x\n", buffer[:n])
 
+	offset := 0
 	header, _, err := dns.ParseDNSHeader(buffer[:n])
 	if err != nil {
 		fmt.Println("Error while parsing response header:", err)
 		os.Exit(1)
 	}
-	fmt.Println(header.QDCOUNT)
+	offset += 12
+	if header.QDCOUNT > 0 {
+		fmt.Println("Offset:", offset)
+		que, newOffset, err := dns.ParseDNSQuestion(buffer[:n], int(header.QDCOUNT), 12)
+		if err != nil {
+			fmt.Printf("Error while parsing response header: %v", err)
+			os.Exit(1)
+		}
+		offset += newOffset
+		for _, q := range que {
+			fmt.Println(q)
+		}
+	}
 }
 
 func main() {

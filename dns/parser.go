@@ -3,6 +3,8 @@ package dns
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
+	"strings"
 )
 
 type DNSHeader struct {
@@ -23,6 +25,12 @@ type DNSFlags struct {
 	RA     uint8
 	Z      uint8
 	RCODE  uint8
+}
+
+type DNSQuestion struct {
+	Name   string
+	QTYPE  uint16
+	QCLASS uint16
 }
 
 func ParseDNSFlags(flags uint16) DNSFlags {
@@ -50,5 +58,46 @@ func ParseDNSHeader(dnsResponse []byte) (*DNSHeader, int, error) {
 		NSCOUNT: binary.BigEndian.Uint16(dnsResponse[8:10]),
 		ARCOUNT: binary.BigEndian.Uint16(dnsResponse[10:]),
 	}
-	return header, 0, nil
+	return header, 12, nil
+}
+
+func ParseDNSQuestion(dnsResponse []byte, QDCOUNT, offset int) ([]DNSQuestion, int, error) {
+	var questions []DNSQuestion
+
+	for i := 0; i < QDCOUNT; i++ {
+		name, newOffset, err := parseDomainName(dnsResponse[offset:], 0)
+		if err != nil {
+			fmt.Println("Err:", err)
+			return nil, 0, err
+		}
+		offset += newOffset
+		questions = append(questions, DNSQuestion{
+			Name:   name,
+			QTYPE:  binary.BigEndian.Uint16(dnsResponse[offset : offset+2]),
+			QCLASS: binary.BigEndian.Uint16(dnsResponse[offset+2 : offset+4]),
+		})
+		offset += 4
+	}
+
+	return questions, offset, nil
+}
+
+func parseDomainName(data []byte, offset int) (string, int, error) {
+	var nameParts []string
+
+	for offset < len(data) {
+		nameLength := int(data[offset])
+		nameLastIndex := offset + nameLength
+		offset++
+		if nameLength == 0 {
+			break
+		}
+		if offset+nameLength > len(data) {
+			return "", offset, errors.New("invalid dns response, malformed question")
+		}
+		nameParts = append(nameParts, string(data[offset:nameLastIndex+1]))
+		offset += nameLength
+	}
+
+	return strings.Join(nameParts, "."), offset, nil
 }

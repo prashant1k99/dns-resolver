@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -28,9 +29,18 @@ type DNSFlags struct {
 }
 
 type DNSQuestion struct {
+	Name   string // Name of the domain
+	QTYPE  uint16 // 2byte Type Code
+	QCLASS uint16 // 2 byte Class Code
+}
+
+type DNSAnswer struct {
 	Name   string
-	QTYPE  uint16
-	QCLASS uint16
+	ATYPE  uint16 // RR Type Code [2 byte]
+	ACLASS uint16 // RR Class code | 2 bytes
+	TTL    uint32 // Time To Live | 32 bits - 4 bytes
+	// RDLENGTH uint16 // Signifies the length of the RDATA in octet meaning bytes
+	RDATA string
 }
 
 func ParseDNSFlags(flags uint16) DNSFlags {
@@ -82,9 +92,58 @@ func ParseDNSQuestion(dnsResponse []byte, QDCOUNT, offset int) ([]DNSQuestion, i
 	return questions, offset, nil
 }
 
+func ParseDNSAnswer(dnsResponse []byte, ANCOUNT, offset int) ([]DNSAnswer, int, error) {
+	var answers []DNSAnswer
+
+	for i := 0; i < ANCOUNT; i++ {
+		var name string
+		if dnsResponse[offset] == 0xc0 {
+			offset++
+			newOffset := dnsResponse[offset]
+			_name, _, err := parseDomainName(dnsResponse[newOffset:], 0)
+			if err != nil {
+				fmt.Println("Err:", err)
+				return nil, 0, err
+			}
+			name = _name
+			offset++
+		} else {
+			_name, newOffset, err := parseDomainName(dnsResponse[offset:], 0)
+			if err != nil {
+				fmt.Println("Err:", err)
+				return nil, 0, err
+			}
+			name = _name
+			offset += newOffset
+		}
+		responseDataLength := binary.BigEndian.Uint16(dnsResponse[offset+8 : offset+10])
+		answers = append(answers, DNSAnswer{
+			Name:   name,
+			ATYPE:  binary.BigEndian.Uint16(dnsResponse[offset : offset+2]),
+			ACLASS: binary.BigEndian.Uint16(dnsResponse[offset+2 : offset+4]),
+			TTL:    binary.BigEndian.Uint32(dnsResponse[offset+4 : offset+8]),
+			// RDLENGTH: responseDataLength,
+			RDATA: generateIpv4FromByte(dnsResponse[offset+10 : offset+10+int(responseDataLength)]),
+		})
+		offset += 10 + int(responseDataLength)
+	}
+
+	return answers, offset, nil
+}
+
+func generateIpv4FromByte(data []byte) string {
+	var ipPart []string
+	for _, b := range data {
+		ipPart = append(ipPart, strconv.Itoa(int(b)))
+	}
+	fmt.Println(ipPart)
+	return strings.Join(ipPart, ".")
+}
+
 func parseDomainName(data []byte, offset int) (string, int, error) {
 	var nameParts []string
 
+	// fmt.Printf("%b \n", data)
 	for offset < len(data) {
 		nameLength := int(data[offset])
 		nameLastIndex := offset + nameLength
@@ -93,7 +152,7 @@ func parseDomainName(data []byte, offset int) (string, int, error) {
 			break
 		}
 		if offset+nameLength > len(data) {
-			return "", offset, errors.New("invalid dns response, malformed question")
+			return "", offset, errors.New("invalid dns response, malformed response")
 		}
 		nameParts = append(nameParts, string(data[offset:nameLastIndex+1]))
 		offset += nameLength

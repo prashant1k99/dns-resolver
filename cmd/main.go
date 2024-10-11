@@ -48,15 +48,26 @@ func QueryServer(message []byte) {
 	}
 	offset += 12
 	if header.QDCOUNT > 0 {
-		fmt.Println("Offset:", offset)
-		que, newOffset, err := dns.ParseDNSQuestion(buffer[:n], int(header.QDCOUNT), 12)
+		que, newOffset, err := dns.ParseDNSQuestion(buffer[:n], int(header.QDCOUNT), offset)
 		if err != nil {
 			fmt.Printf("Error while parsing response header: %v", err)
 			os.Exit(1)
 		}
-		offset += newOffset
+		offset = newOffset
 		for _, q := range que {
 			fmt.Println(q)
+		}
+	}
+
+	if header.ANCOUNT > 0 {
+		ans, newOffset, err := dns.ParseDNSAnswer(buffer[:n], int(header.ANCOUNT), offset)
+		if err != nil {
+			fmt.Printf("Error while parsing response answer: %v", err)
+			os.Exit(1)
+		}
+		offset += newOffset
+		for _, a := range ans {
+			fmt.Println(a)
 		}
 	}
 }

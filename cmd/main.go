@@ -61,7 +61,6 @@ func QueryServer(message []byte) {
 		}
 	}
 
-	fmt.Printf("%8x\n", buffer[offset:n])
 	if header.ANCOUNT > 0 {
 		ans, newOffset, err := dns.ParseDNSAnswer(buffer[:n], int(header.ANCOUNT), offset)
 		if err != nil {

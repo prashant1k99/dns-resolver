@@ -30,14 +30,14 @@ type DNSFlags struct {
 
 type DNSQuestion struct {
 	Name   string // Name of the domain
-	QTYPE  uint16 // 2byte Type Code
-	QCLASS uint16 // 2 byte Class Code
+	QTYPE  string // 2byte Type Code
+	QCLASS string // 2 byte Class Code
 }
 
 type DNSAnswer struct {
 	Name   string
-	ATYPE  uint16 // RR Type Code [2 byte]
-	ACLASS uint16 // RR Class code | 2 bytes
+	ATYPE  string // RR Type Code [2 byte]
+	ACLASS string // RR Class code | 2 bytes
 	TTL    uint32 // Time To Live | 32 bits - 4 bytes
 	// RDLENGTH uint16 // Signifies the length of the RDATA in octet meaning bytes
 	RDATA string
@@ -83,8 +83,8 @@ func ParseDNSQuestion(dnsResponse []byte, QDCOUNT, offset int) ([]DNSQuestion, i
 		offset += newOffset
 		questions = append(questions, DNSQuestion{
 			Name:   name,
-			QTYPE:  binary.BigEndian.Uint16(dnsResponse[offset : offset+2]),
-			QCLASS: binary.BigEndian.Uint16(dnsResponse[offset+2 : offset+4]),
+			QTYPE:  getTypeString(binary.BigEndian.Uint16(dnsResponse[offset : offset+2])),
+			QCLASS: getClassString(binary.BigEndian.Uint16(dnsResponse[offset+2 : offset+4])),
 		})
 		offset += 4
 	}
@@ -119,11 +119,10 @@ func ParseDNSAnswer(dnsResponse []byte, ANCOUNT, offset int) ([]DNSAnswer, int, 
 		responseDataLength := binary.BigEndian.Uint16(dnsResponse[offset+8 : offset+10])
 		answers = append(answers, DNSAnswer{
 			Name:   name,
-			ATYPE:  binary.BigEndian.Uint16(dnsResponse[offset : offset+2]),
-			ACLASS: binary.BigEndian.Uint16(dnsResponse[offset+2 : offset+4]),
+			ATYPE:  getTypeString(binary.BigEndian.Uint16(dnsResponse[offset : offset+2])),
+			ACLASS: getClassString(binary.BigEndian.Uint16(dnsResponse[offset+2 : offset+4])),
 			TTL:    binary.BigEndian.Uint32(dnsResponse[offset+4 : offset+8]),
-			// RDLENGTH: responseDataLength,
-			RDATA: generateIpv4FromByte(dnsResponse[offset+10 : offset+10+int(responseDataLength)]),
+			RDATA:  generateIpv4FromByte(dnsResponse[offset+10 : offset+10+int(responseDataLength)]),
 		})
 		offset += 10 + int(responseDataLength)
 	}

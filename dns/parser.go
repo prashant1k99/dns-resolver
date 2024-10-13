@@ -34,7 +34,7 @@ type DNSQuestion struct {
 	QCLASS string // 2 byte Class Code
 }
 
-type DNSAnswer struct {
+type DNSRR struct {
 	Name   string
 	ATYPE  string // RR Type Code [2 byte]
 	ACLASS string // RR Class code | 2 bytes
@@ -43,7 +43,7 @@ type DNSAnswer struct {
 	RDATA string
 }
 
-func ParseDNSFlags(flags uint16) DNSFlags {
+func parseDNSFlags(flags uint16) DNSFlags {
 	return DNSFlags{
 		QR:     uint8((flags >> 15) & 0x1),
 		OPCODE: uint8((flags >> 11) & 0xF),
@@ -56,13 +56,13 @@ func ParseDNSFlags(flags uint16) DNSFlags {
 	}
 }
 
-func ParseDNSHeader(dnsResponse []byte) (*DNSHeader, int, error) {
+func parseDNSHeader(dnsResponse []byte) (*DNSHeader, int, error) {
 	if len(dnsResponse) < 12 {
 		return nil, 0, errors.New("invalid dns response")
 	}
 	header := &DNSHeader{
 		ID:      binary.BigEndian.Uint16(dnsResponse[:2]),
-		Flags:   ParseDNSFlags(binary.BigEndian.Uint16(dnsResponse[2:4])),
+		Flags:   parseDNSFlags(binary.BigEndian.Uint16(dnsResponse[2:4])),
 		QDCOUNT: binary.BigEndian.Uint16(dnsResponse[4:6]),
 		ANCOUNT: binary.BigEndian.Uint16(dnsResponse[6:8]),
 		NSCOUNT: binary.BigEndian.Uint16(dnsResponse[8:10]),
@@ -71,7 +71,7 @@ func ParseDNSHeader(dnsResponse []byte) (*DNSHeader, int, error) {
 	return header, 12, nil
 }
 
-func ParseDNSQuestion(dnsResponse []byte, QDCOUNT, offset int) ([]DNSQuestion, int, error) {
+func parseDNSQuestion(dnsResponse []byte, QDCOUNT, offset int) ([]DNSQuestion, int, error) {
 	var questions []DNSQuestion
 
 	for i := 0; i < QDCOUNT; i++ {
@@ -92,8 +92,8 @@ func ParseDNSQuestion(dnsResponse []byte, QDCOUNT, offset int) ([]DNSQuestion, i
 	return questions, offset, nil
 }
 
-func ParseDNSAnswer(dnsResponse []byte, ANCOUNT, offset int) ([]DNSAnswer, int, error) {
-	var answers []DNSAnswer
+func parseDNSAnswer(dnsResponse []byte, ANCOUNT, offset int) ([]DNSRR, int, error) {
+	var answers []DNSRR
 
 	for i := 0; i < ANCOUNT; i++ {
 		var name string
@@ -117,12 +117,19 @@ func ParseDNSAnswer(dnsResponse []byte, ANCOUNT, offset int) ([]DNSAnswer, int, 
 			offset += newOffset
 		}
 		responseDataLength := binary.BigEndian.Uint16(dnsResponse[offset+8 : offset+10])
-		answers = append(answers, DNSAnswer{
+		responseType := getTypeString(binary.BigEndian.Uint16(dnsResponse[offset : offset+2]))
+		var responseRDATA string
+		if responseType == "NS" {
+			responseRDATA = generateDomainNameFromBytes(dnsResponse, offset+10, offset+10+int(responseDataLength))
+		} else {
+			responseRDATA = generateIpFromBytes(dnsResponse[offset+10:offset+10+int(responseDataLength)], responseType)
+		}
+		answers = append(answers, DNSRR{
 			Name:   name,
-			ATYPE:  getTypeString(binary.BigEndian.Uint16(dnsResponse[offset : offset+2])),
+			ATYPE:  responseType,
 			ACLASS: getClassString(binary.BigEndian.Uint16(dnsResponse[offset+2 : offset+4])),
 			TTL:    binary.BigEndian.Uint32(dnsResponse[offset+4 : offset+8]),
-			RDATA:  generateIpv4FromByte(dnsResponse[offset+10 : offset+10+int(responseDataLength)]),
+			RDATA:  responseRDATA,
 		})
 		offset += 10 + int(responseDataLength)
 	}
@@ -130,13 +137,27 @@ func ParseDNSAnswer(dnsResponse []byte, ANCOUNT, offset int) ([]DNSAnswer, int, 
 	return answers, offset, nil
 }
 
-func generateIpv4FromByte(data []byte) string {
-	var ipPart []string
-	for _, b := range data {
-		ipPart = append(ipPart, strconv.Itoa(int(b)))
+func generateDomainNameFromBytes(data []byte, offset, maxIndex int) string {
+	return ""
+}
+
+func generateIpFromBytes(data []byte, responseType string) string {
+	if responseType == "A" && len(data) == 4 {
+		// Handle IPv4
+		var ipPart []string
+		for _, b := range data {
+			ipPart = append(ipPart, strconv.Itoa(int(b)))
+		}
+		return strings.Join(ipPart, ".")
+	} else if responseType == "AAAA" && len(data) == 16 {
+		// Handle IPv6
+		var ipPart []string
+		for i := 0; i < len(data); i += 2 {
+			ipPart = append(ipPart, fmt.Sprintf("%02x%02x", data[i], data[i+1]))
+		}
+		return strings.Join(ipPart, ":")
 	}
-	fmt.Println(ipPart)
-	return strings.Join(ipPart, ".")
+	return ""
 }
 
 func parseDomainName(data []byte, offset int) (string, int, error) {

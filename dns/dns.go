@@ -1,66 +1,96 @@
 package dns
 
 import (
-	"encoding/binary"
-	"math/rand"
-	"strings"
-	"time"
+	"fmt"
+	"net"
+	"os"
 )
 
-type Message struct {
-	Header   []byte
-	Question []byte
-	Answer   []byte
+func FetchDNS(domainName string) {
+	requestMessage := []byte{}
+	message := prepareMessage(domainName)
+
+	requestMessage = append(requestMessage, message.Header...)
+	requestMessage = append(requestMessage, message.Question...)
+
+	queryServer("198.41.0.4", requestMessage, domainName)
 }
 
-func NewMessage() *Message {
-	return &Message{
-		Header:   make([]byte, 12),
-		Question: []byte{},
-		Answer:   []byte{},
-	}
-}
-
-func (m *Message) SetHeader() {
-	//  Handle different record query
-	id := GenerateId()
-	binary.BigEndian.PutUint16((*&m).Header[0:2], id)                                  // set Packet Identifier (ID)
-	binary.BigEndian.PutUint16((*m).Header[2:4], combineFlags(0, 0, 0, 0, 1, 0, 0, 0)) // set Query/Response Indicator (QR)
-	binary.BigEndian.PutUint16((*m).Header[4:6], 1)                                    // set QDCOUNT to 1 to donate that message contains 1 question
-}
-
-func (m *Message) SetQuestion(domainName string) {
-	question := encodeDomain(domainName)
-	question = binary.BigEndian.AppendUint16(question, 1) // Set the type of Query 1 for A record and 5 for CNAME [https://www.rfc-editor.org/rfc/rfc1035#section-3.2.2]
-	question = binary.BigEndian.AppendUint16(question, 1) // Set the Class of Query [https://www.rfc-editor.org/rfc/rfc1035#section-3.2.4]
-	(*m).Question = question
-}
-
-func PrepareMessage(domainName string) *Message {
-	message := NewMessage()
-	message.SetHeader()
-	message.SetQuestion(domainName)
-	return message
-}
-
-func encodeDomain(domain string) []byte {
-	splits := strings.Split(domain, ".")
-	var encodedDomain []byte
-	for _, spl := range splits {
-		splLen := len(spl)
-		encodedDomain = append(encodedDomain, byte(splLen))
-		encodedDomain = append(encodedDomain, spl...)
+func queryServer(url string, message []byte, domainName string) {
+	fmt.Printf("Querying %s for %s\n", url, domainName)
+	url += ":53"
+	serverAddr, err := net.ResolveUDPAddr("udp", url)
+	if err != nil {
+		fmt.Println("Error resolving address:", err)
+		os.Exit(1)
 	}
 
-	return append(encodedDomain, '\x00')
-}
+	conn, err := net.DialUDP("udp", nil, serverAddr)
+	if err != nil {
+		fmt.Println("Error dialing UDP:", err)
+		os.Exit(1)
+	}
+	defer conn.Close()
 
-func combineFlags(qr, opcode, aa, tc, rd, ra, z, rcode uint) uint16 {
-	return uint16(qr<<15 | opcode<<11 | aa<<10 | tc<<9 | rd<<8 | ra<<7 | z<<4 | rcode)
-}
+	// Send data to the server
+	_, err = conn.Write(message)
+	if err != nil {
+		fmt.Println("Error sending data:", err)
+		os.Exit(1)
+	}
 
-func GenerateId() uint16 {
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	num := uint16(r.Intn(1 << 16)) // 1 << 16 is 65536
-	return num
+	// Receive requestMessage from the server
+	buffer := make([]byte, 512)
+	n, _, err := conn.ReadFromUDP(buffer)
+	if err != nil {
+		fmt.Println("Error receiving data:", err)
+		os.Exit(1)
+	}
+
+	offset := 0
+	header, _, err := parseDNSHeader(buffer[:n])
+	if err != nil {
+		fmt.Println("Error while parsing response header:", err)
+		os.Exit(1)
+	}
+	fmt.Println(header)
+
+	// Check for the question count
+	offset += 12
+	if header.QDCOUNT > 0 {
+		que, newOffset, err := parseDNSQuestion(buffer[:n], int(header.QDCOUNT), offset)
+		if err != nil {
+			fmt.Printf("Error while parsing response header: %v", err)
+			os.Exit(1)
+		}
+		offset = newOffset
+		for _, q := range que {
+			fmt.Println(q)
+		}
+	}
+
+	// Check for Answer Count
+	if header.ANCOUNT > 0 {
+		ans, newOffset, err := parseDNSAnswer(buffer[:n], int(header.ANCOUNT), offset)
+		if err != nil {
+			fmt.Printf("Error while parsing response answer: %v", err)
+			os.Exit(1)
+		}
+		offset += newOffset
+		for _, a := range ans {
+			fmt.Println(a)
+		}
+	} else if header.NSCOUNT > 0 {
+		// this means the answer count is zero and we want to check for NS Count
+		fmt.Println("Need to parse Authoritative Section and additional section")
+		authoritative, newOffset, err := parseDNSAnswer(buffer[:n], int(header.NSCOUNT), offset)
+		if err != nil {
+			fmt.Printf("Error while parsing authoritative section: %v", err)
+			os.Exit(1)
+		}
+		offset += newOffset
+		for _, aa := range authoritative {
+			fmt.Println(aa)
+		}
+	}
 }

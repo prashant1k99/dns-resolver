@@ -1,5 +1,40 @@
 package dns
 
+type DNSHeader struct {
+	ID      uint16
+	Flags   DNSFlags
+	QDCOUNT uint16
+	ANCOUNT uint16
+	NSCOUNT uint16
+	ARCOUNT uint16
+}
+
+type DNSFlags struct {
+	QR     uint8
+	OPCODE uint8
+	AA     uint8
+	TC     uint8
+	RD     uint8
+	RA     uint8
+	Z      uint8
+	RCODE  uint8
+}
+
+type DNSQuestion struct {
+	Name   string // Name of the domain
+	QTYPE  string // 2byte Type Code
+	QCLASS string // 2 byte Class Code
+}
+
+type DNSRR struct {
+	Name   string
+	ATYPE  string // RR Type Code [2 byte]
+	ACLASS string // RR Class code | 2 bytes
+	TTL    uint32 // Time To Live | 32 bits - 4 bytes
+	// RDLENGTH uint16 // Signifies the length of the RDATA in octet meaning bytes
+	RDATA string
+}
+
 // DNS record types
 const (
 	TypeA     = 1  // A record

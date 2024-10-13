@@ -8,41 +8,6 @@ import (
 	"strings"
 )
 
-type DNSHeader struct {
-	ID      uint16
-	Flags   DNSFlags
-	QDCOUNT uint16
-	ANCOUNT uint16
-	NSCOUNT uint16
-	ARCOUNT uint16
-}
-
-type DNSFlags struct {
-	QR     uint8
-	OPCODE uint8
-	AA     uint8
-	TC     uint8
-	RD     uint8
-	RA     uint8
-	Z      uint8
-	RCODE  uint8
-}
-
-type DNSQuestion struct {
-	Name   string // Name of the domain
-	QTYPE  string // 2byte Type Code
-	QCLASS string // 2 byte Class Code
-}
-
-type DNSRR struct {
-	Name   string
-	ATYPE  string // RR Type Code [2 byte]
-	ACLASS string // RR Class code | 2 bytes
-	TTL    uint32 // Time To Live | 32 bits - 4 bytes
-	// RDLENGTH uint16 // Signifies the length of the RDATA in octet meaning bytes
-	RDATA string
-}
-
 func parseDNSFlags(flags uint16) DNSFlags {
 	return DNSFlags{
 		QR:     uint8((flags >> 15) & 0x1),
@@ -99,6 +64,7 @@ func parseDNSAnswer(dnsResponse []byte, ANCOUNT, offset int) ([]DNSRR, int, erro
 		var name string
 		if dnsResponse[offset] == 0xc0 {
 			offset++
+			// Since this is a pointer, it will set the offset to the pointer offset value provided in dns response
 			newOffset := dnsResponse[offset]
 			_name, _, err := parseDomainName(dnsResponse[newOffset:], 0)
 			if err != nil {

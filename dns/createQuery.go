@@ -23,7 +23,7 @@ func newMessage() *Message {
 
 func (m *Message) setHeader() {
 	//  Handle different record query
-	binary.BigEndian.PutUint16((*&m).Header[0:2], generateId())                        // set Packet Identifier (ID)
+	binary.BigEndian.PutUint16((*m).Header[0:2], generateId())                         // set Packet Identifier (ID)
 	binary.BigEndian.PutUint16((*m).Header[2:4], combineFlags(0, 0, 0, 0, 1, 0, 0, 0)) // set Query/Response Indicator (QR)
 	binary.BigEndian.PutUint16((*m).Header[4:6], 1)                                    // set QDCOUNT to 1 to donate that message contains 1 question
 }

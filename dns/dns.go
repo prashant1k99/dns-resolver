@@ -66,6 +66,7 @@ func queryServer(url string, message []byte, domainName string) {
 			os.Exit(1)
 		}
 		offset = newOffset
+		fmt.Println("Question Section:")
 		for _, q := range que {
 			fmt.Println(q)
 		}
@@ -79,6 +80,7 @@ func queryServer(url string, message []byte, domainName string) {
 			os.Exit(1)
 		}
 		offset += newOffset
+		fmt.Println("Answer Section:")
 		for _, a := range ans {
 			fmt.Println(a)
 		}
@@ -90,9 +92,21 @@ func queryServer(url string, message []byte, domainName string) {
 			fmt.Printf("Error while parsing authoritative section: %v", err)
 			os.Exit(1)
 		}
-		offset += newOffset
+		offset = newOffset
+		fmt.Println("Authoritative Section:")
 		for _, aa := range authoritative {
 			fmt.Println(aa)
+		}
+
+		additional, newOffset, err := parseDNSAnswer(buffer[:n], int(header.ARCOUNT), offset)
+		if err != nil {
+			fmt.Printf("Error while parsing Additional section: %v", err)
+			os.Exit(1)
+		}
+		offset = newOffset
+		fmt.Println("Additional Section:")
+		for _, as := range additional {
+			fmt.Println(as)
 		}
 	}
 }

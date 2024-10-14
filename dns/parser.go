@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 )
@@ -40,11 +41,13 @@ func parseDNSQuestion(dnsResponse []byte, QDCOUNT, offset int) ([]DNSQuestion, i
 	var questions []DNSQuestion
 
 	for i := 0; i < QDCOUNT; i++ {
-		name, newOffset, err := parseDomainName(dnsResponse[offset:], 0)
+		name, newOffset, err := parseDomainName(dnsResponse, offset)
+		fmt.Println(newOffset)
 		if err != nil {
 			fmt.Println("Err:", err)
 			return nil, 0, err
 		}
+
 		offset += newOffset
 		questions = append(questions, DNSQuestion{
 			Name:   name,
@@ -57,39 +60,33 @@ func parseDNSQuestion(dnsResponse []byte, QDCOUNT, offset int) ([]DNSQuestion, i
 	return questions, offset, nil
 }
 
-func parseDNSAnswer(dnsResponse []byte, ANCOUNT, offset int) ([]DNSRR, int, error) {
+func parseDNSAnswer(dnsResponse []byte, COUNT, offset int) ([]DNSRR, int, error) {
 	var answers []DNSRR
 
-	for i := 0; i < ANCOUNT; i++ {
-		var name string
-		if dnsResponse[offset] == 0xc0 {
-			offset++
-			// Since this is a pointer, it will set the offset to the pointer offset value provided in dns response
-			newOffset := dnsResponse[offset]
-			_name, _, err := parseDomainName(dnsResponse[newOffset:], 0)
-			if err != nil {
-				fmt.Println("Err:", err)
-				return nil, 0, err
-			}
-			name = _name
-			offset++
-		} else {
-			_name, newOffset, err := parseDomainName(dnsResponse[offset:], 0)
-			if err != nil {
-				fmt.Println("Err:", err)
-				return nil, 0, err
-			}
-			name = _name
-			offset += newOffset
+	for i := 0; i < COUNT; i++ {
+		name, newOffset, err := parseDomainName(dnsResponse[offset:], 0)
+		if err != nil {
+			fmt.Println("Err:", err)
+			return nil, 0, err
 		}
+		offset += newOffset
+
 		responseDataLength := binary.BigEndian.Uint16(dnsResponse[offset+8 : offset+10])
+
 		responseType := getTypeString(binary.BigEndian.Uint16(dnsResponse[offset : offset+2]))
+
 		var responseRDATA string
 		if responseType == "NS" {
-			responseRDATA = generateDomainNameFromBytes(dnsResponse, offset+10, offset+10+int(responseDataLength))
+			res, _, err := parseDomainName(dnsResponse, offset+10)
+			if err != nil {
+				fmt.Println("Err:", err)
+				os.Exit(1)
+			}
+			responseRDATA = res
 		} else {
 			responseRDATA = generateIpFromBytes(dnsResponse[offset+10:offset+10+int(responseDataLength)], responseType)
 		}
+
 		answers = append(answers, DNSRR{
 			Name:   name,
 			ATYPE:  responseType,
@@ -101,10 +98,6 @@ func parseDNSAnswer(dnsResponse []byte, ANCOUNT, offset int) ([]DNSRR, int, erro
 	}
 
 	return answers, offset, nil
-}
-
-func generateDomainNameFromBytes(data []byte, offset, maxIndex int) string {
-	return ""
 }
 
 func generateIpFromBytes(data []byte, responseType string) string {
@@ -128,20 +121,30 @@ func generateIpFromBytes(data []byte, responseType string) string {
 
 func parseDomainName(data []byte, offset int) (string, int, error) {
 	var nameParts []string
+	isInPointerRef := false
+	internalOffset := offset
 
-	// fmt.Printf("%b \n", data)
-	for offset < len(data) {
-		nameLength := int(data[offset])
-		nameLastIndex := offset + nameLength
-		offset++
+	for {
+		// Check if the value is equal to 0xc0
+		fmt.Println(isInPointerRef)
+		if data[offset] == 0xc0 {
+			isInPointerRef = true
+			offset++
+			internalOffset = int(data[offset])
+			offset++
+			continue
+		}
+		nameLength := int(data[internalOffset])
+		internalOffset++
+		nameLastIndex := internalOffset + nameLength
 		if nameLength == 0 {
 			break
 		}
-		if offset+nameLength > len(data) {
-			return "", offset, errors.New("invalid dns response, malformed response")
+		nameParts = append(nameParts, string(data[internalOffset:nameLastIndex+1]))
+		if !isInPointerRef {
+			offset += nameLength + 1
 		}
-		nameParts = append(nameParts, string(data[offset:nameLastIndex+1]))
-		offset += nameLength
+		internalOffset += nameLength
 	}
 
 	return strings.Join(nameParts, "."), offset, nil

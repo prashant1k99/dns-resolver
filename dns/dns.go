@@ -14,6 +14,7 @@ func FetchDNS(domainName string) {
 	requestMessage = append(requestMessage, message.Question...)
 
 	queryServer("198.41.0.4", requestMessage, domainName)
+	// queryServer("8.8.8.8", requestMessage, domainName)
 }
 
 func queryServer(url string, message []byte, domainName string) {
@@ -70,27 +71,27 @@ func queryServer(url string, message []byte, domainName string) {
 	}
 
 	// Check for Answer Count
-	if header.ANCOUNT > 0 {
-		ans, newOffset, err := parseDNSAnswer(buffer[:n], int(header.ANCOUNT), offset)
-		if err != nil {
-			fmt.Printf("Error while parsing response answer: %v", err)
-			os.Exit(1)
-		}
-		offset += newOffset
-		for _, a := range ans {
-			fmt.Println(a)
-		}
-	} else if header.NSCOUNT > 0 {
-		// this means the answer count is zero and we want to check for NS Count
-		fmt.Println("Need to parse Authoritative Section and additional section")
-		authoritative, newOffset, err := parseDNSAnswer(buffer[:n], int(header.NSCOUNT), offset)
-		if err != nil {
-			fmt.Printf("Error while parsing authoritative section: %v", err)
-			os.Exit(1)
-		}
-		offset += newOffset
-		for _, aa := range authoritative {
-			fmt.Println(aa)
-		}
-	}
+	// if header.ANCOUNT > 0 {
+	// 	ans, newOffset, err := parseDNSAnswer(buffer[:n], int(header.ANCOUNT), offset)
+	// 	if err != nil {
+	// 		fmt.Printf("Error while parsing response answer: %v", err)
+	// 		os.Exit(1)
+	// 	}
+	// 	offset += newOffset
+	// 	for _, a := range ans {
+	// 		fmt.Println(a)
+	// 	}
+	// } else if header.NSCOUNT > 0 {
+	// 	// this means the answer count is zero and we want to check for NS Count
+	// 	// authoritative, newOffset, err := parseDNSAnswer(buffer[:n], int(header.NSCOUNT), offset)
+	// 	authoritative, newOffset, err := parseDNSAnswer(buffer[:n], 2, offset)
+	// 	if err != nil {
+	// 		fmt.Printf("Error while parsing authoritative section: %v", err)
+	// 		os.Exit(1)
+	// 	}
+	// 	offset += newOffset
+	// 	for _, aa := range authoritative {
+	// 		fmt.Println(aa)
+	// 	}
+	// }
 }

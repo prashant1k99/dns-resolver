@@ -42,18 +42,18 @@ func parseDNSQuestion(dnsResponse []byte, QDCOUNT, offset int) ([]DNSQuestion, i
 
 	for i := 0; i < QDCOUNT; i++ {
 		name, newOffset, err := parseDomainName(dnsResponse, offset)
-		fmt.Println(newOffset)
 		if err != nil {
 			fmt.Println("Err:", err)
 			return nil, 0, err
 		}
+		offset = newOffset
 
-		offset += newOffset
 		questions = append(questions, DNSQuestion{
 			Name:   name,
 			QTYPE:  getTypeString(binary.BigEndian.Uint16(dnsResponse[offset : offset+2])),
 			QCLASS: getClassString(binary.BigEndian.Uint16(dnsResponse[offset+2 : offset+4])),
 		})
+
 		offset += 4
 	}
 
@@ -64,12 +64,12 @@ func parseDNSAnswer(dnsResponse []byte, COUNT, offset int) ([]DNSRR, int, error)
 	var answers []DNSRR
 
 	for i := 0; i < COUNT; i++ {
-		name, newOffset, err := parseDomainName(dnsResponse[offset:], 0)
+		name, newOffset, err := parseDomainName(dnsResponse, offset)
 		if err != nil {
 			fmt.Println("Err:", err)
 			return nil, 0, err
 		}
-		offset += newOffset
+		offset = newOffset
 
 		responseDataLength := binary.BigEndian.Uint16(dnsResponse[offset+8 : offset+10])
 
@@ -126,26 +126,28 @@ func parseDomainName(data []byte, offset int) (string, int, error) {
 
 	for {
 		// Check if the value is equal to 0xc0
-		fmt.Println(isInPointerRef)
 		if data[offset] == 0xc0 {
 			isInPointerRef = true
 			offset++
 			internalOffset = int(data[offset])
 			offset++
-			continue
 		}
 		nameLength := int(data[internalOffset])
 		internalOffset++
 		nameLastIndex := internalOffset + nameLength
+		if !isInPointerRef {
+			offset += nameLength + 1
+		}
 		if nameLength == 0 {
 			break
 		}
 		nameParts = append(nameParts, string(data[internalOffset:nameLastIndex+1]))
-		if !isInPointerRef {
-			offset += nameLength + 1
-		}
 		internalOffset += nameLength
 	}
-
+	if len(nameParts) > 1 {
+		for i, name := range nameParts {
+			nameParts[i] = strings.TrimSpace(name)
+		}
+	}
 	return strings.Join(nameParts, "."), offset, nil
 }

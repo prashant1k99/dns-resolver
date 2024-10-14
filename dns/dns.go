@@ -49,15 +49,16 @@ func queryServer(url string, message []byte, domainName string) {
 	}
 
 	offset := 0
-	header, _, err := parseDNSHeader(buffer[:n])
+	header, newOffset, err := parseDNSHeader(buffer[:n])
 	if err != nil {
 		fmt.Println("Error while parsing response header:", err)
 		os.Exit(1)
 	}
+	offset = newOffset
 	fmt.Println(header)
 
+	// fmt.Printf("%x\n", buffer[:n])
 	// Check for the question count
-	offset += 12
 	if header.QDCOUNT > 0 {
 		que, newOffset, err := parseDNSQuestion(buffer[:n], int(header.QDCOUNT), offset)
 		if err != nil {
@@ -71,27 +72,27 @@ func queryServer(url string, message []byte, domainName string) {
 	}
 
 	// Check for Answer Count
-	// if header.ANCOUNT > 0 {
-	// 	ans, newOffset, err := parseDNSAnswer(buffer[:n], int(header.ANCOUNT), offset)
-	// 	if err != nil {
-	// 		fmt.Printf("Error while parsing response answer: %v", err)
-	// 		os.Exit(1)
-	// 	}
-	// 	offset += newOffset
-	// 	for _, a := range ans {
-	// 		fmt.Println(a)
-	// 	}
-	// } else if header.NSCOUNT > 0 {
-	// 	// this means the answer count is zero and we want to check for NS Count
-	// 	// authoritative, newOffset, err := parseDNSAnswer(buffer[:n], int(header.NSCOUNT), offset)
-	// 	authoritative, newOffset, err := parseDNSAnswer(buffer[:n], 2, offset)
-	// 	if err != nil {
-	// 		fmt.Printf("Error while parsing authoritative section: %v", err)
-	// 		os.Exit(1)
-	// 	}
-	// 	offset += newOffset
-	// 	for _, aa := range authoritative {
-	// 		fmt.Println(aa)
-	// 	}
-	// }
+	if header.ANCOUNT > 0 {
+		ans, newOffset, err := parseDNSAnswer(buffer[:n], int(header.ANCOUNT), offset)
+		if err != nil {
+			fmt.Printf("Error while parsing response answer: %v", err)
+			os.Exit(1)
+		}
+		offset += newOffset
+		for _, a := range ans {
+			fmt.Println(a)
+		}
+	} else if header.NSCOUNT > 0 {
+		// this means the answer count is zero and we want to check for NS Count
+		authoritative, newOffset, err := parseDNSAnswer(buffer[:n], int(header.NSCOUNT), offset)
+		// authoritative, newOffset, err := parseDNSAnswer(buffer[:n], 2, offset)
+		if err != nil {
+			fmt.Printf("Error while parsing authoritative section: %v", err)
+			os.Exit(1)
+		}
+		offset += newOffset
+		for _, aa := range authoritative {
+			fmt.Println(aa)
+		}
+	}
 }

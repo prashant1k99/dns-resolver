@@ -125,7 +125,7 @@ func parseDomainName(data []byte, offset int) (string, int, error) {
 	internalOffset := offset
 
 	for {
-		// Check if the value is equal to 0xc0
+		// Check if the infput is pointing to some other offset
 		if data[internalOffset] == 0xc0 {
 			internalOffset = int(data[internalOffset+1])
 			if !isInPointerRef {
@@ -146,6 +146,7 @@ func parseDomainName(data []byte, offset int) (string, int, error) {
 		internalOffset += nameLength
 	}
 	if len(nameParts) > 1 {
+		// To handle some edge cases where additional space is added
 		for i, name := range nameParts {
 			nameParts[i] = strings.TrimSpace(name)
 		}

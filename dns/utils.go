@@ -1,5 +1,13 @@
 package dns
 
+type DNSMesage struct {
+	Header        DNSHeader
+	Question      []DNSQuestion
+	Answer        []DNSRR
+	Authoritative []DNSRR
+	Additional    []DNSRR
+}
+
 type DNSHeader struct {
 	ID      uint16
 	Flags   DNSFlags

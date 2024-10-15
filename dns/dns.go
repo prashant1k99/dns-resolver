@@ -6,21 +6,37 @@ import (
 	"os"
 )
 
-func FetchDNS(domainName string) {
+func FetchDNS(domainName string, queryType string, verbose bool) {
 	requestMessage := []byte{}
-	message := prepareMessage(domainName)
+	message := prepareMessage(domainName, queryType)
 
 	requestMessage = append(requestMessage, message.Header...)
 	requestMessage = append(requestMessage, message.Question...)
 
-	queryServer("198.41.0.4", requestMessage, domainName)
-	// queryServer("8.8.8.8", requestMessage, domainName)
+	queryURL := "198.41.0.4"
+	for {
+		msg := queryServer(queryURL, requestMessage, domainName)
+		// Print the message
+		if msg.Header.ANCOUNT != 0 {
+			fmt.Println("URL:", msg.Answer)
+			break
+		} else {
+			for _, record := range msg.Additional {
+				if record.ATYPE == "A" {
+					queryURL = record.RDATA
+					break
+				}
+			}
+		}
+	}
 }
 
-func queryServer(url string, message []byte, domainName string) {
-	fmt.Printf("Querying %s for %s\n", url, domainName)
-	url += ":53"
-	serverAddr, err := net.ResolveUDPAddr("udp", url)
+func queryServer(queryURL string, message []byte, domainName string) DNSMesage {
+	msg := DNSMesage{}
+
+	fmt.Printf("Querying %s for %s\n", queryURL, domainName)
+	queryURL += ":53"
+	serverAddr, err := net.ResolveUDPAddr("udp", queryURL)
 	if err != nil {
 		fmt.Println("Error resolving address:", err)
 		os.Exit(1)
@@ -28,7 +44,7 @@ func queryServer(url string, message []byte, domainName string) {
 
 	conn, err := net.DialUDP("udp", nil, serverAddr)
 	if err != nil {
-		fmt.Println("Error dialing UDP:", err)
+		fmt.Printf("Error dialing UDP: %v \n", err)
 		os.Exit(1)
 	}
 	defer conn.Close()
@@ -36,7 +52,7 @@ func queryServer(url string, message []byte, domainName string) {
 	// Send data to the server
 	_, err = conn.Write(message)
 	if err != nil {
-		fmt.Println("Error sending data:", err)
+		fmt.Printf("Error sending request: %v \n", err)
 		os.Exit(1)
 	}
 
@@ -44,78 +60,57 @@ func queryServer(url string, message []byte, domainName string) {
 	buffer := make([]byte, 512)
 	n, _, err := conn.ReadFromUDP(buffer)
 	if err != nil {
-		fmt.Println("Error receiving data:", err)
+		fmt.Printf("Error receiving query response: %v \n", err)
 		os.Exit(1)
 	}
 
 	offset := 0
 	header, newOffset, err := parseDNSHeader(buffer[:n])
 	if err != nil {
-		fmt.Println("Error while parsing response header:", err)
+		fmt.Printf("Error parsing response header: %v \n", err)
 		os.Exit(1)
 	}
 	offset = newOffset
-	fmt.Println(header)
+	msg.Header = *header
 
-	// fmt.Printf("%x\n", buffer[:n])
 	// Check for the question count
 	if header.QDCOUNT > 0 {
 		que, newOffset, err := parseDNSQuestion(buffer[:n], int(header.QDCOUNT), offset)
 		if err != nil {
-			fmt.Printf("Error while parsing response header: %v", err)
+			fmt.Printf("Error parsing response question section: %v \n", err)
 			os.Exit(1)
 		}
 		offset = newOffset
-		fmt.Println("Question Section:")
-		for _, q := range que {
-			fmt.Println(q)
-		}
+		msg.Question = que
 	}
 
 	// Check for Answer Count
 	if header.ANCOUNT > 0 {
 		ans, newOffset, err := parseDNSAnswer(buffer[:n], int(header.ANCOUNT), offset)
 		if err != nil {
-			fmt.Printf("Error while parsing response answer: %v", err)
+			fmt.Printf("Error while parsing response answer: %v \n", err)
 			os.Exit(1)
 		}
 		offset += newOffset
-		fmt.Println("Answer Section:")
-		for _, a := range ans {
-			fmt.Println(a)
-		}
+		msg.Answer = ans
 	} else if header.NSCOUNT > 0 {
 		// this means the answer count is zero and we want to check for NS Count
 		authoritative, newOffset, err := parseDNSAnswer(buffer[:n], int(header.NSCOUNT), offset)
-		// authoritative, newOffset, err := parseDNSAnswer(buffer[:n], 2, offset)
 		if err != nil {
-			fmt.Printf("Error while parsing authoritative section: %v", err)
+			fmt.Printf("Error while parsing authoritative section: %v \n", err)
 			os.Exit(1)
 		}
 		offset = newOffset
-		fmt.Println("Authoritative Section:")
-		for _, aa := range authoritative {
-			fmt.Println(aa)
-		}
+		msg.Authoritative = authoritative
 
 		additional, newOffset, err := parseDNSAnswer(buffer[:n], int(header.ARCOUNT), offset)
 		if err != nil {
-			fmt.Printf("Error while parsing Additional section: %v", err)
+			fmt.Printf("Error while parsing Additional section: %v \n", err)
 			os.Exit(1)
 		}
 		offset = newOffset
-		fmt.Println("Additional Section:")
-		for _, as := range additional {
-			fmt.Println(as)
-		}
-
-		var newURL string
-		for _, as := range additional {
-			if as.ATYPE == "A" {
-				newURL = as.RDATA
-				break
-			}
-		}
-		queryServer(newURL, message, domainName)
+		msg.Additional = additional
 	}
+
+	return msg
 }

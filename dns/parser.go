@@ -126,11 +126,12 @@ func parseDomainName(data []byte, offset int) (string, int, error) {
 
 	for {
 		// Check if the value is equal to 0xc0
-		if data[offset] == 0xc0 {
+		if data[internalOffset] == 0xc0 {
+			internalOffset = int(data[internalOffset+1])
+			if !isInPointerRef {
+				offset += 2
+			}
 			isInPointerRef = true
-			offset++
-			internalOffset = int(data[offset])
-			offset++
 		}
 		nameLength := int(data[internalOffset])
 		internalOffset++

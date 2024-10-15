@@ -10,9 +10,9 @@ A simple implementation of DNS resolver in Golang
     - [x] Parse Headers
     - [x] Parse Question
     - [x] Parse Answer
-- [ ] Handle Authority Record 
-- [ ] Handle Additional Record
-- [ ] Format the complete response in Human Readable
-- [ ] Query Root Name server to get the Name server for any domain
+- [x] Handle Authority Record 
+- [x] Handle Additional Record
+- [x] Format the complete response in Human Readable
+- [x] Query Root Name server to get the Name server for any domain
 - [ ] Query for multiple types of requests such as A, CNAME, AA, MX, etc. records
 

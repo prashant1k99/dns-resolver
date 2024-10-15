@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"text/tabwriter"
 )
 
 func FetchDNS(domainName string, queryType string, verbose bool) {
@@ -16,9 +17,12 @@ func FetchDNS(domainName string, queryType string, verbose bool) {
 	queryURL := "198.41.0.4"
 	for {
 		msg := queryServer(queryURL, requestMessage, domainName)
-		// Print the message
+		if verbose {
+			printResult(msg)
+		}
+
 		if msg.Header.ANCOUNT != 0 {
-			fmt.Println("URL:", msg.Answer)
+			prityPrintAnswer(msg.Answer)
 			break
 		} else {
 			for _, record := range msg.Additional {
@@ -34,7 +38,7 @@ func FetchDNS(domainName string, queryType string, verbose bool) {
 func queryServer(queryURL string, message []byte, domainName string) DNSMesage {
 	msg := DNSMesage{}
 
-	fmt.Printf("Querying %s for %s\n", queryURL, domainName)
+	fmt.Printf("Querying %s for %s\n\n", queryURL, domainName)
 	queryURL += ":53"
 	serverAddr, err := net.ResolveUDPAddr("udp", queryURL)
 	if err != nil {
@@ -113,4 +117,49 @@ func queryServer(queryURL string, message []byte, domainName string) DNSMesage {
 	}
 
 	return msg
+}
+
+func printResult(msg DNSMesage) {
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(w, ";; DNS Header Section:")
+	fmt.Fprintln(w, "ID\tFlags\tQuestion-Count\tAnswer-Count\tAuthority-Count\tAdditional-Count")
+	fmt.Fprintf(w, "%d\t%d\t%d\t%d\t%d\t%d\n", msg.Header.ID, msg.Header.Flags, msg.Header.QDCOUNT, msg.Header.ANCOUNT, msg.Header.NSCOUNT, msg.Header.ARCOUNT)
+	fmt.Fprintln(w)
+	if msg.Header.QDCOUNT > 0 {
+		fmt.Fprintln(w, ";; DNS Question Section:")
+		fmt.Fprintln(w, "Domain\tType\tClass")
+		for _, q := range msg.Question {
+			fmt.Fprintf(w, "%s\t%s\t%s\n", q.Name, q.QTYPE, q.QCLASS)
+		}
+		fmt.Fprintln(w)
+	}
+	if msg.Header.NSCOUNT > 0 {
+		fmt.Fprintln(w, ";; DNS Authoritative Section:")
+		fmt.Fprintln(w, "Domain\tType\tClass\tTTL\tDATA")
+		for _, an := range msg.Answer {
+			fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%s\n", an.Name, an.ATYPE, an.ACLASS, an.TTL, an.RDATA)
+		}
+		fmt.Fprintln(w)
+	}
+	if msg.Header.ARCOUNT > 0 {
+		fmt.Fprintln(w, ";; DNS Additional Section:")
+		fmt.Fprintln(w, "Domain\tType\tClass\tTTL\tDATA")
+		for _, an := range msg.Answer {
+			fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%s\n", an.Name, an.ATYPE, an.ACLASS, an.TTL, an.RDATA)
+		}
+		fmt.Fprintln(w)
+	}
+	fmt.Fprintln(w, "==============================================")
+	w.Flush()
+}
+
+func prityPrintAnswer(answer []DNSRR) {
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(w, ";; DNS Answer Section:")
+	fmt.Fprintln(w, "Domain\tType\tClass\tTTL\tDATA")
+	for _, an := range answer {
+		fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%s\n", an.Name, an.ATYPE, an.ACLASS, an.TTL, an.RDATA)
+	}
+	fmt.Fprintln(w)
+	w.Flush()
 }

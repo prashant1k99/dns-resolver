@@ -108,5 +108,14 @@ func queryServer(url string, message []byte, domainName string) {
 		for _, as := range additional {
 			fmt.Println(as)
 		}
+
+		var newURL string
+		for _, as := range additional {
+			if as.ATYPE == "A" {
+				newURL = as.RDATA
+				break
+			}
+		}
+		queryServer(newURL, message, domainName)
 	}
 }

@@ -38,9 +38,8 @@ func (m *Message) setQuestion(domainName string, queryType uint16) {
 func prepareMessage(domainName string, queryType string) *Message {
 	queryTypes := strings.Split(queryType, ",")
 	message := newMessage()
-	message.setHeader(1)
+	message.setHeader(uint16(len(queryTypes)))
 	for _, b := range queryTypes {
-		fmt.Println(b)
 		typeQuery := getTypeId(b)
 		if typeQuery == 0 {
 			fmt.Printf("Invalid Type Query: %v\n", b)

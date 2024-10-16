@@ -17,10 +17,26 @@ func FetchDNS(domainName string, queryType string, verbose bool) {
 	queryURL := "198.41.0.4"
 	for {
 		msg := queryServer(queryURL, requestMessage, domainName)
-		if verbose {
-			printResult(msg)
+		if msg.Header.Flags.RCODE != 0 {
+			switch msg.Header.Flags.RCODE {
+			case 1:
+				fmt.Println("Error: FORMAT Error!! Name server was unable to interpret the query.")
+			case 2:
+				fmt.Println("Error: SERVER FAILURE!! Name server was unable to process the query due to problem with the name server")
+			case 3:
+				fmt.Println("Error: NAME ERROR!! Meaningful only for responses from an authoritative name server, this code signifies that the domain name referenced in the query does not exist.")
+			case 4:
+				fmt.Println("Error: NOT IMPLEMENTED!! The name server does not support the requested kind of query.")
+			case 5:
+				fmt.Println("Error: REFUSED!! The name server refuses to perform the specified operation for policy reasons.  For example, a name server may not wish to provide the information to the particular requester, or a name server may not wish to perform a particular operation (e.g., zone transfer) for particular data.")
+			default:
+				fmt.Println("Error: Reserved for future use.")
+			}
+			break
 		}
-
+		if verbose {
+			printVerboseResult(msg)
+		}
 		if msg.Header.ANCOUNT != 0 {
 			prityPrintAnswer(msg.Answer)
 			break
@@ -119,7 +135,7 @@ func queryServer(queryURL string, message []byte, domainName string) DNSMesage {
 	return msg
 }
 
-func printResult(msg DNSMesage) {
+func printVerboseResult(msg DNSMesage) {
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(w, ";; DNS Header Section:")
 	fmt.Fprintln(w, "ID\tFlags\tQuestion-Count\tAnswer-Count\tAuthority-Count\tAdditional-Count")

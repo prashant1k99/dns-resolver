@@ -2,9 +2,7 @@ package dns
 
 import (
 	"encoding/binary"
-	"fmt"
 	"math/rand"
-	"os"
 	"strings"
 	"time"
 )
@@ -28,25 +26,31 @@ func (m *Message) setHeader(qCount uint16) {
 	binary.BigEndian.PutUint16((*m).Header[4:6], qCount)                               // set QDCOUNT to 1 to donate that message contains 1 question
 }
 
-func (m *Message) setQuestion(domainName string, queryType uint16) {
-	question := encodeDomain(domainName)
-	question = binary.BigEndian.AppendUint16(question, queryType) // Set the type of Query 1 for A record and 5 for CNAME [https://www.rfc-editor.org/rfc/rfc1035#section-3.2.2]
-	question = binary.BigEndian.AppendUint16(question, 1)         // Set the Class of Query [https://www.rfc-editor.org/rfc/rfc1035#section-3.2.4]
-	(*m).Question = append((*m).Question, question...)
+func (m *Message) setQuestion(domainName string, queryTypes []uint16) {
+	for _, queryType := range queryTypes {
+		var question []byte
+		// if i == 0 {
+		// } else {
+		// 	question = []byte{0xc0, 0x0c}
+		// }
+
+		question = encodeDomain(domainName)
+		question = binary.BigEndian.AppendUint16(question, queryType) // Set the type of Query 1 for A record and 5 for CNAME [https://www.rfc-editor.org/rfc/rfc1035#section-3.2.2]
+		question = binary.BigEndian.AppendUint16(question, 1)         // Set the Class of Query [https://www.rfc-editor.org/rfc/rfc1035#section-3.2.4]
+		(*m).Question = append((*m).Question, question...)
+
+	}
 }
 
 func prepareMessage(domainName string, queryType string) *Message {
 	queryTypes := strings.Split(queryType, ",")
+	var parseQueryTypes []uint16
+	for _, b := range queryTypes {
+		parseQueryTypes = append(parseQueryTypes, uint16(getTypeId(b)))
+	}
 	message := newMessage()
 	message.setHeader(uint16(len(queryTypes)))
-	for _, b := range queryTypes {
-		typeQuery := getTypeId(b)
-		if typeQuery == 0 {
-			fmt.Printf("Invalid Type Query: %v\n", b)
-			os.Exit(1)
-		}
-		message.setQuestion(domainName, typeQuery)
-	}
+	message.setQuestion(domainName, parseQueryTypes)
 	return message
 }
 

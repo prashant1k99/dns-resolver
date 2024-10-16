@@ -76,15 +76,15 @@ func parseDNSAnswer(dnsResponse []byte, COUNT, offset int) ([]DNSRR, int, error)
 		responseType := getTypeString(binary.BigEndian.Uint16(dnsResponse[offset : offset+2]))
 
 		var responseRDATA string
-		if responseType == "NS" {
+		if responseType == "A" || responseType == "AAAA" {
+			responseRDATA = generateIpFromBytes(dnsResponse[offset+10:offset+10+int(responseDataLength)], responseType)
+		} else {
 			res, _, err := parseDomainName(dnsResponse, offset+10)
 			if err != nil {
 				fmt.Println("Err:", err)
 				os.Exit(1)
 			}
 			responseRDATA = res
-		} else {
-			responseRDATA = generateIpFromBytes(dnsResponse[offset+10:offset+10+int(responseDataLength)], responseType)
 		}
 
 		answers = append(answers, DNSRR{
@@ -115,6 +115,8 @@ func generateIpFromBytes(data []byte, responseType string) string {
 			ipPart = append(ipPart, fmt.Sprintf("%02x%02x", data[i], data[i+1]))
 		}
 		return strings.Join(ipPart, ":")
+	} else {
+		fmt.Println("response Type not found:", responseType)
 	}
 	return ""
 }

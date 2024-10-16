@@ -32,5 +32,5 @@ func main() {
 	flag.Parse()
 
 	// Fetch DNS records
-	dns.FetchDNS(domainName, *typeFlagPtr, *verboseFlagPtr)
+	dns.FetchDNS(domainName, *typeFlagPtr, *verboseFlagPtr, "198.41.0.4")
 }

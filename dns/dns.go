@@ -1,54 +1,85 @@
 package dns
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"os"
 	"text/tabwriter"
 )
 
-func FetchDNS(domainName string, queryType string, verbose bool) {
+func FetchDNS(domainName string, queryType string, verbose bool, resolverURL string) (string, error) {
+	var finalIP string
 	requestMessage := []byte{}
 	message := prepareMessage(domainName, queryType)
 
 	requestMessage = append(requestMessage, message.Header...)
 	requestMessage = append(requestMessage, message.Question...)
 
-	queryURL := "198.41.0.4"
+	fmt.Printf("%x\n", requestMessage)
+
+	queryURL := []string{resolverURL}
 	for {
-		msg := queryServer(queryURL, requestMessage, domainName)
+		msg := queryServer(queryURL[0], requestMessage, domainName)
 		if msg.Header.Flags.RCODE != 0 {
 			switch msg.Header.Flags.RCODE {
 			case 1:
-				fmt.Println("Error: FORMAT Error!! Name server was unable to interpret the query.")
+				err := errors.New("Error: FORMAT Error!! Name server was unable to interpret the query.")
+				fmt.Println(err)
+				return "", err
 			case 2:
-				fmt.Println("Error: SERVER FAILURE!! Name server was unable to process the query due to problem with the name server")
+				err := errors.New("Error: SERVER FAILURE!! Name server was unable to process the query due to problem with the name server")
+				fmt.Println(err)
+				return "", err
 			case 3:
-				fmt.Println("Error: NAME ERROR!! Meaningful only for responses from an authoritative name server, this code signifies that the domain name referenced in the query does not exist.")
+				err := errors.New("Error: NAME ERROR!! Meaningful only for responses from an authoritative name server, this code signifies that the domain name referenced in the query does not exist.")
+				fmt.Println(err)
+				return "", err
 			case 4:
-				fmt.Println("Error: NOT IMPLEMENTED!! The name server does not support the requested kind of query.")
+				err := errors.New("Error: NOT IMPLEMENTED!! The name server does not support the requested kind of query.")
+				fmt.Println(err)
+				return "", err
 			case 5:
-				fmt.Println("Error: REFUSED!! The name server refuses to perform the specified operation for policy reasons.  For example, a name server may not wish to provide the information to the particular requester, or a name server may not wish to perform a particular operation (e.g., zone transfer) for particular data.")
+				err := errors.New("Error: REFUSED!! The name server refuses to perform the specified operation for policy reasons.  For example, a name server may not wish to provide the information to the particular requester, or a name server may not wish to perform a particular operation (e.g., zone transfer) for particular data.")
+				fmt.Println(err)
+				return "", err
 			default:
-				fmt.Println("Error: Reserved for future use.")
+				err := errors.New("Error: Reserved for future use.")
+				fmt.Println(err)
+				return "", err
 			}
-			break
 		}
 		if verbose {
 			printVerboseResult(msg)
 		}
 		if msg.Header.ANCOUNT != 0 {
-			prityPrintAnswer(msg.Answer)
+			finalIP = prityPrintAnswer(msg.Answer)
 			break
 		} else {
-			for _, record := range msg.Additional {
-				if record.ATYPE == "A" {
-					queryURL = record.RDATA
-					break
+			if msg.Header.ARCOUNT > 0 {
+				queryURL = []string{}
+				for _, record := range msg.Additional {
+					if record.ATYPE == "A" {
+						queryURL = append(queryURL, record.RDATA)
+					}
 				}
+			} else if len(queryURL) > 2 {
+				queryURL = queryURL[1:]
+			} else if msg.Header.NSCOUNT > 0 {
+				domainToQuery := msg.Authoritative[0].RDATA
+				updatedIPToQuery, err := FetchDNS(domainToQuery, "A", true, "1.1.1.1")
+				if err != nil {
+					fmt.Println("Unable to process:", err)
+					os.Exit(1)
+				}
+				queryURL = []string{updatedIPToQuery}
+			} else {
+				fmt.Println("Unnable to resolve dns query!!!")
+				os.Exit(1)
 			}
 		}
 	}
+	return finalIP, nil
 }
 
 func queryServer(queryURL string, message []byte, domainName string) DNSMesage {
@@ -152,7 +183,7 @@ func printVerboseResult(msg DNSMesage) {
 	if msg.Header.NSCOUNT > 0 {
 		fmt.Fprintln(w, ";; DNS Authoritative Section:")
 		fmt.Fprintln(w, "Domain\tType\tClass\tTTL\tDATA")
-		for _, an := range msg.Answer {
+		for _, an := range msg.Authoritative {
 			fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%s\n", an.Name, an.ATYPE, an.ACLASS, an.TTL, an.RDATA)
 		}
 		fmt.Fprintln(w)
@@ -160,7 +191,7 @@ func printVerboseResult(msg DNSMesage) {
 	if msg.Header.ARCOUNT > 0 {
 		fmt.Fprintln(w, ";; DNS Additional Section:")
 		fmt.Fprintln(w, "Domain\tType\tClass\tTTL\tDATA")
-		for _, an := range msg.Answer {
+		for _, an := range msg.Additional {
 			fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%s\n", an.Name, an.ATYPE, an.ACLASS, an.TTL, an.RDATA)
 		}
 		fmt.Fprintln(w)
@@ -169,7 +200,7 @@ func printVerboseResult(msg DNSMesage) {
 	w.Flush()
 }
 
-func prityPrintAnswer(answer []DNSRR) {
+func prityPrintAnswer(answer []DNSRR) string {
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(w, ";; DNS Answer Section:")
 	fmt.Fprintln(w, "Domain\tType\tClass\tTTL\tDATA")
@@ -178,4 +209,5 @@ func prityPrintAnswer(answer []DNSRR) {
 	}
 	fmt.Fprintln(w)
 	w.Flush()
+	return answer[0].RDATA
 }

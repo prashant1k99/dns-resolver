@@ -16,3 +16,13 @@ A simple implementation of DNS resolver in Golang
 - [x] Query Root Name server to get the Name server for any domain
 - [ ] Query for multiple types of requests such as A, CNAME, AA, MX, etc. records
 
+### Usage:
+```sh
+go run cmd/main.go google.com -t A
+```
+This resolves the ip address of google.com
+
+To see all the request made and complete dns response, add the verbose flag
+```sh
+go run cmd/main.go google.com -t A -v
+```
